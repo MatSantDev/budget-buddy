@@ -32,6 +32,7 @@ import { ArrowLeft, Plus, Pencil, Trash2, Package, Wrench } from "lucide-react";
 import { toast } from "sonner";
 
 const emptyItem: OrcamentoItem = {
+  id: undefined,
   descricao: "",
   tipoOrcamentoItem: "PRODUTO",
   quantidade: 1,
@@ -79,10 +80,13 @@ export default function OrcamentoDetalhePage() {
   };
 
   const saveMutation = useMutation({
-    mutationFn: (item: OrcamentoItem) =>
-      item.id
+    mutationFn: (item: OrcamentoItem) => {
+      // Remover o campo id se for um novo item (id undefined)
+      const itemToSend = item.id ? item : { ...item, id: undefined };
+      return item.id
         ? orcamentoItemApi.atualizar(orcamentoId, item.id, item)
-        : orcamentoItemApi.inserir(orcamentoId, item),
+        : orcamentoItemApi.inserir(orcamentoId, itemToSend);
+    },
     onSuccess: () => {
       invalidate();
       setDialogOpen(false);
@@ -115,6 +119,34 @@ export default function OrcamentoDetalhePage() {
       const s = servicos.find((x) => x.id === Number(itemId));
       if (s) setForm({ ...form, servico: s, produto: null, valorUnitario: s.valorUnitario, descricao: s.nome });
     }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Validar se produto ou serviço foi selecionado
+    if (form.tipoOrcamentoItem === "PRODUTO" && (!form.produto || !form.produto.id)) {
+      toast.error("Selecione um produto válido");
+      return;
+    }
+    if (form.tipoOrcamentoItem === "SERVICO" && (!form.servico || !form.servico.id)) {
+      toast.error("Selecione um serviço válido");
+      return;
+    }
+    
+    // Validar quantidade
+    if (form.quantidade <= 0) {
+      toast.error("A quantidade deve ser maior que zero");
+      return;
+    }
+    
+    // Validar valor unitário
+    if (form.valorUnitario < 0) {
+      toast.error("O valor unitário não pode ser negativo");
+      return;
+    }
+    
+    saveMutation.mutate(form);
   };
 
   if (!orcamento) return <div className="p-8 text-muted-foreground">Carregando...</div>;
@@ -201,7 +233,7 @@ export default function OrcamentoDetalhePage() {
           <DialogHeader>
             <DialogTitle className="font-display">{editing ? "Editar Item" : "Adicionar Item"}</DialogTitle>
           </DialogHeader>
-          <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); saveMutation.mutate(form); }}>
+          <form className="space-y-4" onSubmit={handleSubmit}>
             <div>
               <label className="text-sm font-medium text-foreground">Tipo</label>
               <Select value={form.tipoOrcamentoItem} onValueChange={(v) => handleTipoChange(v as TipoOrcamentoItem)}>
@@ -236,11 +268,11 @@ export default function OrcamentoDetalhePage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-medium text-foreground">Quantidade</label>
-                <Input type="number" min="1" value={form.quantidade} onChange={(e) => setForm({ ...form, quantidade: Number(e.target.value) })} required />
+                <Input type="number" min="1" step="1" value={form.quantidade} onChange={(e) => setForm({ ...form, quantidade: Math.max(1, parseInt(e.target.value) || 1) })} required />
               </div>
               <div>
                 <label className="text-sm font-medium text-foreground">Valor Unitário</label>
-                <Input type="number" step="0.01" min="0" value={form.valorUnitario} onChange={(e) => setForm({ ...form, valorUnitario: Number(e.target.value) })} required />
+                <Input type="number" step="0.01" min="0" value={form.valorUnitario} onChange={(e) => setForm({ ...form, valorUnitario: Math.max(0, parseFloat(e.target.value) || 0) })} required />
               </div>
             </div>
             <div className="flex justify-end gap-2 pt-2">
